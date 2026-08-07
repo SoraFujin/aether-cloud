@@ -1,0 +1,39 @@
+version: "3.9"
+
+# aether-cloud: central token proxy + webhook relay
+# Runs at api.tryaether.io
+# DB: Supabase (external) — no local postgres needed
+# Redis: managed here
+
+services:
+  cloud-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.cloud.rule=Host(`api.tryaether.io`)"
+      - "traefik.http.routers.cloud.tls=true"
+      - "traefik.http.routers.cloud.tls.certresolver=letsencrypt"
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-aether-redis}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  redis_data:
